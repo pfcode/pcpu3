@@ -1,0 +1,84 @@
+# PCPU v3 schematics
+
+1. Registers:
+	A1 32-bit register
+	B1 16-bit register
+	B2 16-bit register
+	C1 8-bit register
+	C2 8-bit register
+
+2. Special registers:
+	CF 2-bit register (ro)
+	NF 8-bit interrupt register (rw)
+	EX 16-bit execution pointer register (ro)
+
+3. Instructions:
+	GET.8 <register> [pointer]		- gets 8 bits from memory
+	GET.16 <register> [pointer]		- gets 16 bits from memory
+	GET.32 <register> [pointer]		- gets 32 bits from memory
+
+	IGET.8 <register_out> <16-bit register_in>	- gets 8 bits from memory indirect
+	IGET.16 <register_out> <16-bit register_in>	- gets 16 bits from memory indirect
+	IGET.32 <register_out> <16-bit register_in>	- gets 32 bits from memory indirect
+	
+	SAVE.8 [pointer] <register>		- saves 8 lowest bits to memory
+	SAVE.16 [pointer] <register>		- saves 16 lowest bits to memory
+	SAVE.32 [pointer] <register>		- saves 32 lowest bits to memory
+
+	ISAVE.8 <16-bit register_out> <register_in>		- saves 8 lowest bits to memory indirect
+	ISAVE.16 <16-bit register_out> <register_in>		- saves 16 lowest bits to memory indirect
+	ISAVE.32 <16-bit register_out> <register_in>		- saves 32 lowest bits to memory indirect
+
+	MOV <register_out> <register_in>	- copy bits from register to register
+
+	NEG <register>				- negate all bits in register
+	SHL <register>				- shift all bits to the left once
+	SHR <register>				- shift all bits to the right once
+
+	ADD <register_out> <register_in>	
+	SUB <register_out> <register_in>	
+	MUL <register_out> <register_in>	
+	DIV <register_out> <register_in>	
+	MOD <register_out> <register_in>	
+
+	AND <register_out> <register_in>	
+	OR <register_out> <register_in>	
+	XOR <register_out> <register_in>	
+
+	OUT <8-bit port> <register_in>
+	IN <register_out> <8-bit port>
+
+	CMP <register_1> <register_2>
+	JMP [pointer]
+	JE [pointer]
+	JNE [pointer]
+	JG [pointer]
+	JL [pointer]
+
+	INT
+
+4. Device Interface:
+	8-bit ID's, taking values in/out up to 32 bits in size
+
+	0x00:0x1F 	- CPU devices
+	0x20:0x2F	- special devices (such as serial console or keyboard)
+	0x30:0xFF	- external devices
+
+5. CPU devices:
+	(OUT) ID:0x00		- HALT device; halts CPU
+	(OUT) ID:0x01		- RESET device; clears all registers and sets EX to 0
+
+	(IN) ID:0x00		- CLOCK device; returns 16-bit amount of ticks per milisecond
+	(IN) ID:0x01		- CLOCK device; returns 32-bit amount of ticks per second
+
+	(OUT) ID: 0x02		- PIT device; register an interrupt to execute regularly; takes in a 32-bit value:	
+		[24-bit ticks interval] [8-bit interrupt number]
+
+	(OUT) ID: 0x03		- PIT device; unregister an interrupt; takes in an 8-bit value:	
+		[8-bit interrupt number]
+
+6. Special devices:
+	(OUT) ID:0x20		- CONSOLE device; prints out an ASCII character; takes in an 8-bit value:
+		[8-bit ASCII value]
+
+	(IN) ID:0x20		- CONSOLE device; returns current ASCII scancode
