@@ -1,0 +1,156 @@
+## pCPUv3 documentation
+## CPU instructions reference
+
+# Table of contents:
+
+1. Instruction structure
+2. Memory management
+3. Bitwise functions
+4. Arithmetic functions
+5. Logic functions
+6. I/O functions
+7. Comparation & program execution
+8. Interrupts
+9. Register addresses
+
+# 1. Instruction structure
+
+Each instruction (e.g. GET32, NEG, MOV, JMP, ...) actually is a numeric 8-bit value that triggers 
+specific CPU function. Some instructions have arguments (each can be up to 32-bit of size) that 
+are ignored by opcode multiplexer, but parsed by selected function module.
+
+	Example (dummy) instruction that has 2 arguments: first 8-bit and second 32-bit
+	0xFF 0xBB 0xDEADBEEF
+
+	These numbers above are a proper format that can be parsed by CPU (machine code).
+
+Instructions are parsed by CPU until the memory ends. NUL opcodes are treated as a kind of 
+'space' in machine code. They're just skipped and CPU looks for other instructions to execute.
+
+In the next sections instructions will be written in the following schema:
+0xFF DUMMY	REGISTER POINTER	Description of this opcode
+|    |    	|
+|    |    	\- Instruction arguments: REGISTER is an 8-bit register address (See section 9.),
+|    |    	   POINTER is a 16-bit RAM address
+|    \- Opcode label ( the same as used in the internal debugger )
+\- Opcode id given to the instruction multiplexer
+
+# 2. Memory management
+
+0x01 GET8	REGISTER POINTER	Gets 8-bit value from memory area pointed by POINTER and 
+					puts it into REGISTER.
+
+0x02 GET16	REGISTER POINTER	Gets 16-bit value from memory area pointed by POINTER and 
+					puts it into REGISTER.
+
+0x03 GET32	REGISTER POINTER	Gets 32-bit value from memory area pointed by POINTER and 
+					puts it into REGISTER.
+
+0x04 SAVE8	POINTER REGISTER 	Takes 8-bit value from REGISTER and saves to memory area
+					pointed by POINTER
+
+0x05 SAVE16	POINTER	REGISTER	Takes 16-bit value from REGISTER and saves to memory area 
+					pointed by POINTER
+
+0x06 SAVE32	POINTER	REGISTER	Takes 32-bit value from REGISTER and saves to memory area 
+					pointed by POINTER
+
+
+0x07 IGET8	REGISTER POINTER	Gets 8-bit value from memory area pointed by a value of memory 
+					pointed by POINTER and puts it into REGISTER; indirect
+
+0x08 IGET16	REGISTER POINTER	Gets 16-bit value from memory area pointed by a value of memory 
+					pointed by POINTER and puts it into REGISTER; indirect
+
+0x09 IGET32	REGISTER POINTER	Gets 32-bit value from memory area pointed by a value of memory 
+					pointed by POINTER and puts it into REGISTER; indirect
+
+
+0x0a ISAVE8	POINTER REGISTER 	Takes 8-bit value from REGISTER and saves to memory area
+					pointed by a value of memory pointed by POINTER; indirect
+
+0x0b ISAVE16	POINTER REGISTER 	Takes 16-bit value from REGISTER and saves to memory area
+					pointed by a value of memory pointed by POINTER; indirect
+
+0x0c ISAVE32	POINTER REGISTER 	Takes 32-bit value from REGISTER and saves to memory area
+					pointed by a value of memory pointed by POINTER; indirect
+
+
+0x0d MOV	REGISTER1 REGISTER2 	Copies values between registers (from REGISTER2 to 
+					REGISTER1)
+
+# 3. Bitwise functions
+
+0x0e NEG	REGISTER		Negates all the bits in REGISTER
+
+0x0f SHL	REGISTER		Shifts all the bits to the left side once
+
+0x10 SHR	REGISTER		Shifts all the bits to the right side once
+
+# 4. Arithmetic functions
+
+0x11 ADD	REGISTER1 REGISTER2	Adds value of REGISTER2 to REGISTER1
+
+0x12 SUB	REGISTER1 REGISTER2	Substracts value of REGISTER2 from REGISTER1
+
+0x13 MUL	REGISTER1 REGISTER2	Multiplies REGISTER1 by value of REGISTER2
+
+0x14 DIV	REGISTER1 REGISTER2	Divides REGISTER1 by value of REGISTER2
+
+0x15 MOD	REGISTER1 REGISTER2	Does a modulo operation on REGISTER1 by value of REGISTER2
+
+# 5. Logic functions
+
+0x16 AND	REGISTER1 REGISTER2	REGISTER1 = REGISTER1 & REGISTER2
+
+0x17 OR		REGISTER1 REGISTER2	REGISTER1 = REGISTER1 | REGISTER2
+
+0x18 XOR	REGISTER1 REGISTER2	REGISTER1 = REGISTER1 ^ REGISTER2
+
+# 6. I/O functions
+
+0x19 OUT	PORT	REGISTER	Sends value of REGISTER to output of number PORT
+
+0x1a IN 	REGISTER PORT   	Takes value from input of number PORT and saves it to 
+					REGISTER
+
+# 7. Comparation & program execution
+
+0x1b CMP	REGISTER1 REGISTER2	Compares two numbers stored in registers REGISTER1 and 
+					REGISTER2 and sets CF flag in the behaviour described 
+					below:
+						if REGISTER1 == REGISTER2 set CF to 0
+						if REGISTER1 > REGISTER2 set CF to 1
+						if REGISTER1 < REGISTER2 set CF to 2
+
+0x1c JMP	POINTER			Changes program execution vector to the specified pointer
+
+0x1d JE		POINTER			Jumps to the POINTER only if CF is equal to 0 
+
+0x1e JNE	POINTER			Jumps to the POINTER only if CF is different from 0 
+
+0x1f JG		POINTER			Jumps to the POINTER only if CF is equal to 1 
+
+0x20 JL		POINTER			Jumps to the POINTER only if CF is equal to 2
+
+# 8. Interrupts
+
+0x21 INT				Does an interrupt in program execution. The current state 
+					of all registers is saved on stack, then CPU looks for
+					the interrupt vector and executes program located 
+					somewhere else. After end of a new program execution,
+					CPU is restoring the latest stack and execution of
+					parent program is resuming.
+ 
+# 9. Register adresses
+
+The following table shows all the registers available and their permissions:
+
+0x01 A1		32-bit	read-write
+0x02 B1		16-bit	read-write
+0x03 B2		16-bit	read-write
+0x04 C1		8-bit	read-write
+0x05 C2		8-bit	read-write
+0x06 CF		2-bit	read only
+0x07 NF		8-bit	read-write
+0x08 EX		16-bit	read only

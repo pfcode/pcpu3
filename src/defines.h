@@ -20,37 +20,36 @@
 #define MOV		0x0d
 
 // Bitwise
-#define NEG		0x0f
-#define SHL		0x10
-#define SHR		0x11
+#define NEG		0x0e
+#define SHL		0x0f
+#define SHR		0x10
 
 // Math
-#define ADD		0x14
-#define SUB		0x15
-#define MUL		0x16
-#define DIV		0x17
-#define MOD		0x18
+#define ADD		0x11
+#define SUB		0x12
+#define MUL		0x13
+#define DIV		0x14
+#define MOD		0x15
 
 // Logic
-#define AND		0x19
-#define OR		0x1a
-#define XOR		0x1b
-#define IF		0x1c
+#define AND		0x16
+#define OR		0x17
+#define XOR		0x18
 
 // I/O
-#define OUT		0x1d
-#define IN		0x1e
+#define OUT		0x19
+#define IN		0x1a
 
 // Comparation
-#define CMP		0x1f
-#define JMP		0x20
-#define JE		0x21
-#define JNE		0x22
-#define JG		0x23
-#define JL		0x24
+#define CMP		0x1b
+#define JMP		0x1c
+#define JE		0x1d
+#define JNE		0x1e
+#define JG		0x1f
+#define JL		0x20
 
 // Interrupt
-#define INT		0x25
+#define INT		0x21
 
 // Register IDs
 #define REG_A1		0x01

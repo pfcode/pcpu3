@@ -2,7 +2,10 @@
 #include <stdlib.h>
 
 #include "defines.h"
+#include "emu-dump.h"
 #include "rom-default.h"
+
+#define DEBUG_OUTPUT 1
 
 /* Registers */
 uint32	A1;
@@ -75,6 +78,10 @@ void dumpRegs(){
 	printf("B1:%04X\tB2:%04X\n", B1, B2);
 	printf("C1:%02X\tC2:%02X\n", C1, C2);
 	printf("CF:%01X\tNF:%02X\tEX:%04X\n", CF, NF, EX);
+}
+
+void dumpRegsInline(){
+	printf("[A1:%08X B1:%04X B2:%04X C1:%02X C2:%02X CF:%01X NF:%02X EX:%04X]", A1, B1, B2, C1, C2, CF, NF, EX);
 }
 
 void loadROM(){
@@ -393,8 +400,8 @@ void i_in(){
 
 // CMP instruction
 void i_cmp(){
-	uint8 reg1	= getReg(getRAM8(EX + 1));
-	uint8 reg2	= getReg(getRAM8(EX + 2));
+	uint32 reg1	= getReg(getRAM8(EX + 1));
+	uint32 reg2	= getReg(getRAM8(EX + 2));
 	if(reg1 == reg2) CF = 0;
 	else if(reg1 > reg2) CF = 1;
 	else CF = 2;
@@ -405,31 +412,30 @@ void i_cmp(){
 // JMP instruction
 void i_jmp(){
 	t_ptr pointer	= getRAM16(EX + 1);
-	if(pointer == 0) EX = 0xFFFF;
-	else EX = pointer - 1;
+	EX = pointer - 1;
 }
 
 // JE instruction
 void i_je(){
-	if(CMP == 0) i_jmp();
+	if(CF == 0) i_jmp();
 	else EX += 2;
 }
 
 // JNE instruction
 void i_jne(){
-	if(CMP != 0) i_jmp();
+	if(CF != 0) i_jmp();
 	else EX += 2;
 }
 
 // JG instruction
 void i_jg(){
-	if(CMP == 1) i_jmp();
+	if(CF == 1) i_jmp();
 	else EX += 2;
 }
 
 // JL instruction
 void i_jl(){
-	if(CMP == 2) i_jmp();
+	if(CF == 2) i_jmp();
 	else EX += 2;
 }
 
@@ -438,11 +444,17 @@ void i_int(){
 	int i;
 	t_stack stack = getStack();
 	EX = interrupts[NF];
+	execute();
 	setStack(stack);
 }
 
 void execute(){
 	while(!halted && EX < RAM_SIZE){
+		if(DEBUG_OUTPUT){
+			dumpInstruction(&RAM[EX]);
+			printf("\t");
+			dumpRegsInline();
+		}
 		switch(RAM[EX]){
 			default: break;
 			case NUL: break;
@@ -488,13 +500,16 @@ void execute(){
 			case INT: i_int(); break;
 		}
 		EX++;
+		if(DEBUG_OUTPUT) getchar();
 	}
 }
 
 int main(){
 	prepare(1024 * 1024); /* 1MB RAM */
 	loadROM();
+	printf("Starting execution from 0x0000\n");
 	execute();
-	dumpRegs();
+	printf("The execution has stopped.\n");
+	if(DEBUG_OUTPUT) dumpRegs();
 	cleanup();
 }
