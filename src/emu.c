@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "defines.h"
 #include "emu-dump.h"
 #include "rom-default.h"
 
 #define DEBUG_OUTPUT 1
+#define VERSION_STRING "0.1"
 
 /* Registers */
 uint32	A1;
@@ -72,6 +74,8 @@ int prepare(int memsize){
 	int i;
 	for(i = 0; i < 256; i++) interrupts[i];
 }
+
+void execute();
 
 void dumpRegs(){
 	printf("A1:%08X\n", A1);
@@ -446,6 +450,7 @@ void i_int(){
 	EX = interrupts[NF];
 	execute();
 	setStack(stack);
+	halted = false;
 }
 
 void execute(){
@@ -504,10 +509,65 @@ void execute(){
 	}
 }
 
-int main(){
-	prepare(1024 * 1024); /* 1MB RAM */
-	loadROM();
-	printf("Starting execution from 0x0000\n");
+int main(int argc, char *argv[]){
+	uint16 pre_mem = 1024*1024;
+	t_ptr pre_ex = 0x0000;
+	FILE *romfile = NULL;
+	char rompath[255];
+	uint8 pre_rom[1024*1024];
+	uint16 pre_romsize;
+	char rom_select = 0;
+	if(argc <= 1){
+		printf("PCPU-v3 emulator\n");
+		printf("Usage: %s <options> romfile.bin\n", argv[0]);
+		printf("Available options:\n");
+		printf(" --ex pointer\t\tSet EX (EXecution pointer) to start executing from specified memory pointer. Format is: 0x12FE\n");
+		printf(" --mem bytes \t\tSet RAM size. Default: 1048576 (1MB).\n");
+		printf(" --version   \t\tShow version of this emulator.\n");
+		return 0;
+	} else{
+		for(int i = 1; i < argc; i++){
+			if(strncmp(argv[i], "--ex", strlen("--ex")) == 0){
+				if(sscanf(argv[i+1], "%x", &pre_ex) > 0){
+					i++;
+				}
+			} else if(strncmp(argv[i], "--mem", strlen("--mem")) == 0){
+				if(sscanf(argv[i+1], "%d", &pre_mem) > 0){
+					i++;
+				}
+			} else if(strncmp(argv[i], "--version", strlen("--version")) == 0){
+				printf("PCPU-v3 emulator. Author: pfcode. Version: %s\n", VERSION_STRING);
+			} else{
+				if(sscanf(argv[i], "%s", &rompath) > 0){
+					romfile = fopen(rompath, "rb+");
+					if(!romfile){
+						printf("ROM file: %s is not found.\n", rompath);
+						return 1;
+					}
+					int c = fgetc(romfile);
+					int j = 0;
+					while(c != EOF){
+						pre_rom[j] = c;
+						j++;
+						c = fgetc(romfile);
+					}
+					pre_romsize = j;
+					rom_select = 1;
+				}
+			}
+		}
+	}
+	printf("Attaching %d bytes of RAM memory\n", pre_mem);
+	prepare(pre_mem); /* 1MB RAM */
+	EX = pre_ex;
+	printf("Loading ROM on 0x0000\n");
+	if(rom_select == 0) loadROM();
+	else{
+		for(int i = 0; i < pre_romsize; i++){
+			RAM[i] = pre_rom[i];
+		}
+	}
+	printf("Starting execution from 0x%04X\n", EX);
 	execute();
 	printf("The execution has stopped.\n");
 	if(DEBUG_OUTPUT) dumpRegs();
