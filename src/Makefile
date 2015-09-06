@@ -1,6 +1,6 @@
 EMU_BINARY=pcpu-emu
 EMU_SOURCES= emu-dump.c emu.c
-EMU_CFLAGS=
+EMU_CFLAGS=-std=c99
 
 emu:
 	$(CC) -o $(EMU_BINARY) $(EMU_SOURCES) $(EMU_CFLAGS)

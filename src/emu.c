@@ -450,7 +450,7 @@ void i_int(){
 	EX = interrupts[NF];
 	execute();
 	setStack(stack);
-	halted = false;
+	halted = 0;
 }
 
 void execute(){
