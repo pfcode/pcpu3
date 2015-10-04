@@ -82,3 +82,9 @@
 		[8-bit ASCII value]
 
 	(IN) ID:0x20		- CONSOLE device; returns current ASCII scancode
+
+	(OUT) ID:0x21		- VIDEO device controller; takes in an 32-bit value
+		[8-bit not specified] [16-bit pointer] [8-bit command]
+		0x00:	turn off video mode
+		0x01:	turn on video mode (320x200x1)
+		0x02:   get frame from memory (8K from 16-bit pointer)

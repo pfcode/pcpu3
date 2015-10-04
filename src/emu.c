@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <SDL/SDL.h>
 
 #include "defines.h"
 #include "emu-dump.h"
 #include "rom-default.h"
 
-#define DEBUG_OUTPUT 1
+#define DEBUG_OUTPUT 0
 #define VERSION_STRING "0.1"
 
 /* Registers */
@@ -97,6 +98,30 @@ void cleanup(){
 	free(RAM);
 }
 
+void gpu(uint8 cmd, uint16 vptr){
+	static SDL_Surface *screen = NULL;
+	switch(cmd){
+		default: break;
+		case 0x00:
+			SDL_FreeSurface(screen);
+			screen = NULL;
+			SDL_Quit();
+			break;
+		case 0x01:
+			if(!screen) screen = SDL_SetVideoMode(320, 200, 8, SDL_SWSURFACE);
+			SDL_Flip(screen);
+			break;
+		case 0x02:
+			for(int i = vptr; i < 8000 && i < RAM_SIZE; i++){
+				for(int j = 0; j < 8; j++){
+					((uint8 *)(screen->pixels))[i*8 + j] = (RAM[i] >> j) ? 0xFF : 0x00;
+				}
+			}
+			SDL_Flip(screen);
+			break;
+	}
+}
+
 void di_out(uint8 port, uint32 value){
 	switch(port){
 		default: return;
@@ -113,6 +138,9 @@ void di_out(uint8 port, uint32 value){
 			return;
 		case 0x20:
 			putchar((uint8) value);
+			return;
+		case 0x21:
+			gpu((uint8) value, (uint16)(value >> 8));
 			return;
 	}
 }
@@ -569,7 +597,7 @@ int main(int argc, char *argv[]){
 	}
 	printf("Starting execution from 0x%04X\n", EX);
 	execute();
-	printf("The execution has stopped.\n");
+	printf("\nThe execution has stopped.\n");
 	if(DEBUG_OUTPUT) dumpRegs();
 	cleanup();
 }

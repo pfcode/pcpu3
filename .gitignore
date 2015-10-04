@@ -1,1 +1,4 @@
 pcpu-emu
+pcpu-asm
+asm/pcpu-asm
+src/pcpu-emu
