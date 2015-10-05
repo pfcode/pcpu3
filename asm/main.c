@@ -22,8 +22,14 @@ long codeLines;
 #define WORD_OPCODE 3		// e.g. GET8
 #define WORD_REGISTER 4		// e.g. AX
 #define WORD_POINTER 5		// e.g. 0xA230		When pointer's strlen > 0, then it is a variable
-#define WORD_VALUE 6		// e.g. 0x20		Always 8-bit
-#define WORD_LABELPTR 7		// e.g. .main
+#define WORD_VARNAME 6		// e.g. variable
+#define WORD_VALUE 7		// e.g. 0xAB		Always 8-bit
+#define WORD_VALUE2 8		// e.g. 0xABCD
+#define WORD_VALUE4 9		// e.g. 0xABCDABCD
+
+#define SYMBOL_DB 1
+#define SYMBOL_DW 2
+#define SYMBOL_DL 4
 
 typedef struct{
 	char type;
@@ -39,6 +45,16 @@ typedef struct{
 t_wordline *sourceLines;
 
 long executive_size = 0;
+long stack_size = 0;
+
+typedef struct{
+	int length;
+	uint32 value;
+	char name[256];
+} t_datafield;
+
+t_datafield *stack;
+long stackItems;
 
 char * strtolower(char *string){
 	char *cp;
@@ -49,6 +65,18 @@ char * strtolower(char *string){
 		cp++;
 	}
 	return(string);
+}
+
+uint8 parseSymbolCode(char *s){
+	s = strtolower(s);
+	if(strcmp(s, "db") == 0) return SYMBOL_DB;
+	if(strcmp(s, "dw") == 0) return SYMBOL_DW;
+	if(strcmp(s, "dl") == 0) return SYMBOL_DL;
+
+	printf("[Syntax] ParseSymbolCode: Invalid assembler symbol: %s.\n", s);
+	exit(1);
+
+	return 0;
 }
 
 uint8 parseRegisterCode(char *s){
@@ -76,6 +104,33 @@ uint8 parseInstructionCode(char *s){
 	if(strcmp(s, "save8") == 0) return SAVE8;
 	if(strcmp(s, "save16") == 0) return SAVE16;
 	if(strcmp(s, "save32") == 0) return SAVE32;
+	if(strcmp(s, "iget8") == 0) return IGET8;
+	if(strcmp(s, "iget16") == 0) return IGET16;
+	if(strcmp(s, "iget32") == 0) return IGET32;
+	if(strcmp(s, "isave8") == 0) return ISAVE8;
+	if(strcmp(s, "isave16") == 0) return ISAVE16;
+	if(strcmp(s, "isave32") == 0) return ISAVE32;
+	if(strcmp(s, "mov") == 0) return MOV;
+	if(strcmp(s, "neg") == 0) return NEG;
+	if(strcmp(s, "shl") == 0) return SHL;
+	if(strcmp(s, "shr") == 0) return SHR;
+	if(strcmp(s, "add") == 0) return ADD;
+	if(strcmp(s, "sub") == 0) return SUB;
+	if(strcmp(s, "mul") == 0) return MUL;
+	if(strcmp(s, "div") == 0) return DIV;
+	if(strcmp(s, "mod") == 0) return MOD;
+	if(strcmp(s, "and") == 0) return AND;
+	if(strcmp(s, "or") == 0) return OR;
+	if(strcmp(s, "xor") == 0) return XOR;
+	if(strcmp(s, "out") == 0) return OUT;
+	if(strcmp(s, "in") == 0) return IN;
+	if(strcmp(s, "cmp") == 0) return CMP;
+	if(strcmp(s, "jmp") == 0) return JMP;
+	if(strcmp(s, "je") == 0) return JE;
+	if(strcmp(s, "jne") == 0) return JNE;
+	if(strcmp(s, "jg") == 0) return JG;
+	if(strcmp(s, "jl") == 0) return JL;
+	if(strcmp(s, "int") == 0) return INT;
 
 	printf("[Syntax] ParseInstructionCode: Invalid opcode symbol: %s.\n", s);
 	exit(1);
@@ -237,7 +292,7 @@ void getWords(){
 			}
 		} else if(strcmp("out", wordzero) == 0){
 			// WORD_OPCODE WORD_VALUE WORD_REGISTER
-			if(sscanf(sourceCode[i], "%s %d %s", &s1, &i1, &s2) != 3){
+			if(sscanf(sourceCode[i], "%s 0x%x %s", &s1, &i1, &s2) != 3){
 				printf("[Syntax] GetWords: Incorrect %s usage in line: \n\t%s\n", wordzero, sourceCode[i]);
 				exit(1);
 			}
@@ -258,7 +313,7 @@ void getWords(){
 			sourceLines[i].words[2].value = parseRegisterCode(s2);
 		} else if(strcmp("in", wordzero) == 0){
 			// WORD_OPCODE WORD_REGISTER WORD_VALUE
-			if(sscanf(sourceCode[i], "%s %s %d", &s1, &s2, &i1) != 3){
+			if(sscanf(sourceCode[i], "%s %s 0x%x", &s1, &s2, &i1) != 3){
 				printf("[Syntax] GetWords: Incorrect %s usage in line: \n\t%s\n", wordzero, sourceCode[i]);
 				exit(1);
 			}
@@ -285,6 +340,43 @@ void getWords(){
 			sourceLines[i].words[0].type = WORD_OPCODE;
 			strcpy(sourceLines[i].words[0].str, wordzero);
 			sourceLines[i].words[0].value = parseInstructionCode(wordzero);
+		} else if(strcmp("db", wordzero) == 0
+		|| strcmp("dw", wordzero) == 0
+		|| strcmp("dl", wordzero) == 0){
+			// WORD_SPECIAL WORD_VARNAME WORD_VALUE|WORD_VALUE2|WORD_VALUE4
+			if(sscanf(sourceCode[i], "%s %s 0x%x", &s1, &s2, &i1) != 3){
+				f1 = 1;
+				if(sscanf(sourceCode[i], "%s %s", &s1, &s2) != 2){
+					printf("[Syntax] GetWords: Incorrect %s usage in line: \n\t%s\n", wordzero, sourceCode[i]);
+					exit(1);
+				}
+			}
+			sourceLines[i].wordCount = 3;
+			sourceLines[i].words = (t_word *) malloc(sizeof(t_word) * sourceLines[i].wordCount);
+
+			sourceLines[i].words[0].type = WORD_SPECIAL;
+			strcpy(sourceLines[i].words[0].str, s1);
+			sourceLines[i].words[0].value = parseSymbolCode(s1);
+
+			sourceLines[i].words[1].type = WORD_VARNAME;
+			strcpy(sourceLines[i].words[1].str, s2);
+
+			switch(sourceLines[i].words[0].value){
+				default: break;
+				case SYMBOL_DB:
+					sourceLines[i].words[2].type = WORD_VALUE;
+					break;
+				case SYMBOL_DW:
+					sourceLines[i].words[2].type = WORD_VALUE2;
+					break;
+				case SYMBOL_DL:
+					sourceLines[i].words[2].type = WORD_VALUE4;
+					break;
+			}
+			if(f1 == 1){ i1 = 0; }
+			sourceLines[i].words[2].value = i1;
+
+			stackItems++;
 		} else{
 			printf("[Syntax] GetWords: Unsupported symbol: %s in line: \n\t%s\n", wordzero, sourceCode[i]);
 			exit(1);
@@ -345,6 +437,8 @@ void filePrepare(FILE *fp, char *filename){
 
 void dumpCodeStack(){
 	for(int i = 0; i < codeLines; i++){
+		if(sourceLines[i].words[0].type == WORD_SPECIAL) continue;
+
 		printf("%d\t ", i);
 		for(int j = 0; j < sourceLines[i].wordCount; j++){
 			t_word w = sourceLines[i].words[j];
@@ -381,27 +475,165 @@ void dumpCodeStack(){
 	}
 }
 
+void dumpStack(){
+	long offset = 0;
+	for(int i = 0; i < stackItems; i++){
+		if(stack[i].length == 0) return;
+		switch(stack[i].length){
+			default:
+				printf("0x%04X: %08X as %s\n", offset, stack[i].value, stack[i].name);
+				break;
+			case 1:
+				printf("0x%04X: %02X as %s\n", offset, stack[i].value, stack[i].name);
+				break;
+			case 2:
+				printf("0x%04X: %04X as %s\n", offset, stack[i].value, stack[i].name);
+				break;
+		}
+		offset += stack[i].length;
+	}
+}
+
+int varExists(char *s){
+	for(int i = 0; i < stackItems; i++){
+		if(stack[i].length == 0) return 0;
+
+		if(strcmp(s, stack[i].name) == 0) return 1;
+	}
+	return 0;
+}
+
+int getStackPointer(int offset, char *name){
+	for(int i = 0; i < stackItems; i++){
+		if(stack[i].length == 0) break;
+
+		if(strcmp(stack[i].name, name) == 0){
+			return offset;
+		}
+		offset += stack[i].length;
+	}
+	return -1;
+}
+
+void createStack(){
+	stack = (t_datafield *) malloc(sizeof(t_datafield) * stackItems);
+	for(int i = 0; i < stackItems; i++){
+		stack[i].length = 0;
+	}
+
+	long offset = 0;
+	for(int i = 0; i < codeLines; i++){
+		t_word wordzero = sourceLines[i].words[0];
+		if(wordzero.type == WORD_SPECIAL){
+			if(wordzero.value == SYMBOL_DB){
+				t_word wordname = sourceLines[i].words[1];
+				if(varExists(wordname.str)){
+					printf("[Scope] CreateStack: Tried to define second variable with the same label: %s\n", wordname.str);
+					exit(1);
+				}
+
+				t_word wordvalue = sourceLines[i].words[2];
+				stack[offset].length = 1;
+				stack[offset].value = wordvalue.value;
+				strcpy(stack[offset].name, wordname.str);
+				offset++;
+			} else if(wordzero.value == SYMBOL_DW){
+				t_word wordname = sourceLines[i].words[1];
+				if(varExists(wordname.str)){
+					printf("[Scope] CreateStack: Tried to define second variable with the same label: %s\n", wordname.str);
+					exit(1);
+				}
+
+				t_word wordvalue = sourceLines[i].words[2];
+				stack[offset].length = 2;
+				stack[offset].value = wordvalue.value;
+				strcpy(stack[offset].name, wordname.str);
+				offset++;
+			} else if(wordzero.value == SYMBOL_DL){
+				t_word wordname = sourceLines[i].words[1];
+				if(varExists(wordname.str)){
+					printf("[Scope] CreateStack: Tried to define second variable with the same label: %s\n", wordname.str);
+					exit(1);
+				}
+
+				t_word wordvalue = sourceLines[i].words[2];
+				stack[offset].length = 4;
+				stack[offset].value = wordvalue.value;
+				strcpy(stack[offset].name, wordname.str);
+				offset++;
+			}
+		}
+	}
+}
+
 void estimateSizes(){
-	// Estimate instructions block size
 	executive_size = 0;
+	stack_size = 0;
+	for(int i = 0; i < codeLines; i++){
+		t_word wordzero = sourceLines[i].words[0];
+		switch(wordzero.type){
+			default:
+				for(int j = 0; j < sourceLines[i].wordCount; j++){
+					t_word w = sourceLines[i].words[j];
+					switch(w.type){
+						default: break;
+						case WORD_OPCODE: executive_size += 1; break;
+						case WORD_POINTER: executive_size += 2; break;
+						case WORD_REGISTER: executive_size += 1; break;
+						case WORD_VALUE: executive_size += 1; break;
+					}
+				}
+				break;
+			case WORD_SPECIAL:
+				switch(wordzero.value){
+					default: break;
+					case SYMBOL_DB:
+						stack_size += 1;
+						break;
+					case SYMBOL_DW:
+						stack_size += 2;
+						break;
+					case SYMBOL_DL:
+						stack_size += 4;
+						break;
+				}
+				break;
+		}
+	}
+}
+
+void resolveVariables(){
 	for(int i = 0; i < codeLines; i++){
 		for(int j = 0; j < sourceLines[i].wordCount; j++){
 			t_word w = sourceLines[i].words[j];
 			switch(w.type){
 				default: break;
-				case WORD_OPCODE: executive_size += 1; break;
-				case WORD_POINTER: executive_size += 2; break;
-				case WORD_REGISTER: executive_size += 1; break;
-				case WORD_VALUE: executive_size += 1; break;
+				case WORD_POINTER:
+					if(strlen(w.str) > 0){
+						int ptr = getStackPointer(executive_size + 1, w.str);
+						if(ptr < 0){
+							printf("[Scope] ResolveVariables: Variable: %s has not been declared\n", w.str);
+							exit(1);
+						} else{
+							sourceLines[i].words[j].str[0] = '\0';
+							sourceLines[i].words[j].value = ptr;
+						}
+					}
+					break;
 			}
 		}
 	}
 }
 
 void assemble(){
-	uint8 *binary = (uint8 *) malloc(sizeof(uint8) * executive_size);
+	long binsize = executive_size + 1 + stack_size;
+	uint8 *binary = (uint8 *) malloc(sizeof(uint8) * binsize);
+	for(int i = 0; i < binsize; i++) binary[i] = 0;
+
 	long offset = 0;
 	for(int i = 0; i < codeLines; i++){
+		t_word wordzero = sourceLines[i].words[0];
+		if(wordzero.type != WORD_OPCODE) continue;
 		for(int j = 0; j < sourceLines[i].wordCount; j++){
 			t_word w = sourceLines[i].words[j];
 			switch(w.type){
@@ -411,7 +643,7 @@ void assemble(){
 					offset += 1;
 					break;
 				case WORD_POINTER:
-					binary[offset] = (w.value & 0xFF00);
+					binary[offset] = (w.value & 0xFF00) >> 8;
 					binary[offset + 1] = (w.value & 0x00FF);
 					offset += 2;
 					break;
@@ -424,6 +656,39 @@ void assemble(){
 					offset += 1;
 					break;
 			}
+		}
+	}
+
+	binary[offset] = NUL;
+	offset++;
+
+	for(int i = 0; i < stackItems; i++){
+		if(stack[i].length == 0) break;
+
+		printf("SI %d.: %X\n", i, stack[i].value);
+
+		switch(stack[i].length){
+			default: break;
+			case 1:
+				binary[offset] = stack[i].value;
+				offset++;
+				break;
+			case 2:
+				binary[offset] = (stack[i].value & 0xFF00) >> 8;
+				offset++;
+				binary[offset] = stack[i].value & 0x00FF;
+				offset++;
+				break;
+			case 4:
+				binary[offset] = (stack[i].value & 0xFF000000) >> 24;
+				offset++;
+				binary[offset] = (stack[i].value & 0x00FF0000) >> 16;
+				offset++;
+				binary[offset] = (stack[i].value & 0x0000FF00) >> 8;
+				offset++;
+				binary[offset] = stack[i].value & 0x000000FF;
+				offset++;
+				break;
 		}
 	}
 	output = binary;
@@ -449,6 +714,12 @@ int main(int argc, char *argv[]){
 	estimateSizes();
 	printf("Estimated executive size: %d bytes\n", executive_size);
 
+	createStack();
+	dumpStack();
+
+	resolveVariables();
+	dumpCodeStack();
+
 	assemble();
 
 	FILE *binary = fopen(argv[2], "wb");
@@ -457,7 +728,8 @@ int main(int argc, char *argv[]){
 		return -1;
 	}
 
-	fwrite(output, sizeof(output[0]), executive_size, binary);
+	long bytes = fwrite(output, sizeof(output[0]), executive_size + 1 + stack_size, binary);
+	printf("Output binary: %s [%d bytes]\n", argv[2], bytes);
 
 	fclose(source);
 	fclose(binary);
