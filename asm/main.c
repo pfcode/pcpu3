@@ -30,6 +30,7 @@ long codeLines;
 #define SYMBOL_DB 1
 #define SYMBOL_DW 2
 #define SYMBOL_DL 4
+#define SYMBOL_LABEL 5
 
 typedef struct{
 	char type;
@@ -56,6 +57,13 @@ typedef struct{
 t_datafield *stack;
 long stackItems;
 
+typedef struct{
+	uint16 ptr;
+	char name[256];
+} t_label;
+t_label *labels;
+long labelItems;
+
 char * strtolower(char *string){
 	char *cp;
 
@@ -72,6 +80,7 @@ uint8 parseSymbolCode(char *s){
 	if(strcmp(s, "db") == 0) return SYMBOL_DB;
 	if(strcmp(s, "dw") == 0) return SYMBOL_DW;
 	if(strcmp(s, "dl") == 0) return SYMBOL_DL;
+	if(strcmp(s, "label") == 0) return SYMBOL_LABEL;
 
 	printf("[Syntax] ParseSymbolCode: Invalid assembler symbol: %s.\n", s);
 	exit(1);
@@ -151,10 +160,7 @@ void getWords(){
 		wordzero = strtolower(wordzero);
 		if(strcmp("get8", wordzero) == 0
 		|| strcmp("get16", wordzero) == 0
-		|| strcmp("get32", wordzero) == 0
-		|| strcmp("iget8", wordzero) == 0
-		|| strcmp("iget16", wordzero) == 0
-		|| strcmp("iget32", wordzero) == 0){
+		|| strcmp("get32", wordzero) == 0){
 			// WORD_OPCODE WORD_REGISTER WORD_POINTER
 			if(sscanf(sourceCode[i], "%s %s 0x%x", &s1, &s2, &i1) != 3){
 				f1 = 1; // Pointer is a variable
@@ -184,10 +190,7 @@ void getWords(){
 			}
 		} else if(strcmp("save8", wordzero) == 0
 		|| strcmp("save16", wordzero) == 0
-		|| strcmp("save32", wordzero) == 0
-		|| strcmp("isave8", wordzero) == 0
-		|| strcmp("isave16", wordzero) == 0
-		|| strcmp("isave32", wordzero) == 0){
+		|| strcmp("save32", wordzero) == 0){
 			// WORD_OPCODE WORD_POINTER WORD_REGISTER
 			if(sscanf(sourceCode[i], "%s 0x%x %s", &s1, &i1, &s2) != 3){
 				f1 = 1; // Pointer is a variable
@@ -224,7 +227,13 @@ void getWords(){
 		|| strcmp("and", wordzero) == 0
 		|| strcmp("or", wordzero) == 0
 		|| strcmp("xor", wordzero) == 0
-		|| strcmp("cmp", wordzero) == 0){
+		|| strcmp("cmp", wordzero) == 0
+		|| strcmp("iget8", wordzero) == 0
+		|| strcmp("iget16", wordzero) == 0
+		|| strcmp("iget32", wordzero) == 0
+		|| strcmp("isave8", wordzero) == 0
+		|| strcmp("isave16", wordzero) == 0
+		|| strcmp("isave32", wordzero) == 0){
 			// WORD_OPCODE WORD_REGISTER WORD_REGISTER
 			if(sscanf(sourceCode[i], "%s %s %s", &s1, &s2, &s3) != 3){
 				printf("[Syntax] GetWords: Incorrect %s usage in line: \n\t%s\n", wordzero, sourceCode[i]);
@@ -268,9 +277,9 @@ void getWords(){
 		|| strcmp("jg", wordzero) == 0
 		|| strcmp("jl", wordzero) == 0){
 			// WORD_OPCODE WORD_POINTER
-			if(sscanf(sourceCode[i], "%s %s", &s1, &i1) != 2){
+			if(sscanf(sourceCode[i], "%s 0x%x", &s1, &i1) != 2){
 				f1 = 1; // Pointer is a variable
-				if(sscanf(sourceCode[i], "%s %s %s", &s1, &s2) != 2 || !(isalpha(s2[0]) || s2[0] == '.')){
+				if(sscanf(sourceCode[i], "%s %s", &s1, &s2) != 2 || !(isalpha(s2[0]) || s2[0] == '.')){
 					printf("[Syntax] GetWords: Incorrect %s usage in line: \n\t%s\n", wordzero, sourceCode[i]);
 					exit(1);
 				}
@@ -377,6 +386,23 @@ void getWords(){
 			sourceLines[i].words[2].value = i1;
 
 			stackItems++;
+		} else if(strcmp("label", wordzero) == 0){
+			// WORD_SPECIAL WORD_LABEL
+			if(sscanf(sourceCode[i], "%s %s", &s1, &s2) != 2 || !(isalpha(s2[0]))){
+				printf("[Syntax] GetWords: Incorrect %s usage in line: \n\t%s\n", wordzero, sourceCode[i]);
+				exit(1);
+			}
+			sourceLines[i].wordCount = 2;
+			sourceLines[i].words = (t_word *) malloc(sizeof(t_word) * sourceLines[i].wordCount);
+
+			sourceLines[i].words[0].type = WORD_SPECIAL;
+			strcpy(sourceLines[i].words[0].str, s1);
+			sourceLines[i].words[0].value = parseSymbolCode(s1);
+
+			sourceLines[i].words[1].type = WORD_LABELNAME;
+			strcpy(sourceLines[i].words[1].str, s2);
+
+			labelItems++;
 		} else{
 			printf("[Syntax] GetWords: Unsupported symbol: %s in line: \n\t%s\n", wordzero, sourceCode[i]);
 			exit(1);
@@ -426,8 +452,8 @@ void filePrepare(FILE *fp, char *filename){
 		if(buf2[0] != ';' && slen > 0){
 			codeLines++;
 			sourceCode = (char **) realloc((void *) sourceCode, sizeof(char *) * codeLines);
-			sourceCode[codeLines - 1] = (char *) malloc(sizeof(char) * (strlen(buf2) + 1));
-			strcat(sourceCode[codeLines - 1], buf2);
+			sourceCode[codeLines - 1] = (char *) malloc(sizeof(char) * (strlen(buf2) + 2));
+			strcpy(sourceCode[codeLines - 1], buf2);
 		}
 	}
 
@@ -494,6 +520,14 @@ void dumpStack(){
 	}
 }
 
+void dumpLabels(){
+	long offset = 0;
+	for(int i = 0; i < labelItems; i++){
+		if(labels[i].name[0] == '\0') return;
+		printf("%d\t%s => 0x%04X\n", i, labels[i].name, labels[i].ptr);
+	}
+}
+
 int varExists(char *s){
 	for(int i = 0; i < stackItems; i++){
 		if(stack[i].length == 0) return 0;
@@ -511,6 +545,17 @@ int getStackPointer(int offset, char *name){
 			return offset;
 		}
 		offset += stack[i].length;
+	}
+	return -1;
+}
+
+int getLabelPointer(char *name){
+	for(int i = 0; i < labelItems; i++){
+		if(labels[i].name[0] == '\0') break;
+
+		if(strcmp(labels[i].name, name) == 0){
+			return labels[i].ptr;
+		}
 	}
 	return -1;
 }
@@ -566,10 +611,12 @@ void createStack(){
 	}
 }
 
-void estimateSizes(){
-	executive_size = 0;
-	stack_size = 0;
-	for(int i = 0; i < codeLines; i++){
+int *calcSizes(long max_offset){
+	int *ret = (int *) malloc(sizeof(int) * 2);
+	ret[0] = 0;
+	ret[1] = 0;
+	long upTo = (max_offset >= 0) ? max_offset : codeLines;
+	for(int i = 0; i < upTo; i++){
 		t_word wordzero = sourceLines[i].words[0];
 		switch(wordzero.type){
 			default:
@@ -577,10 +624,10 @@ void estimateSizes(){
 					t_word w = sourceLines[i].words[j];
 					switch(w.type){
 						default: break;
-						case WORD_OPCODE: executive_size += 1; break;
-						case WORD_POINTER: executive_size += 2; break;
-						case WORD_REGISTER: executive_size += 1; break;
-						case WORD_VALUE: executive_size += 1; break;
+						case WORD_OPCODE: ret[0] += 1; break;
+						case WORD_POINTER: ret[0] += 2; break;
+						case WORD_REGISTER: ret[0] += 1; break;
+						case WORD_VALUE: ret[0] += 1; break;
 					}
 				}
 				break;
@@ -588,35 +635,76 @@ void estimateSizes(){
 				switch(wordzero.value){
 					default: break;
 					case SYMBOL_DB:
-						stack_size += 1;
+						ret[1] += 1;
 						break;
 					case SYMBOL_DW:
-						stack_size += 2;
+						ret[1] += 2;
 						break;
 					case SYMBOL_DL:
-						stack_size += 4;
+						ret[1] += 4;
 						break;
 				}
 				break;
+		}
+	}
+	return ret;
+}
+
+void estimateSizes(){
+	int *s = calcSizes(-1);
+	executive_size = s[0];
+	stack_size = s[1];
+	free(s);
+}
+
+void createLabels(){
+	if(labelItems == 0) return;
+	labels = (t_label *) malloc(sizeof(t_label) * labelItems);
+	for(int i = 0; i < labelItems; i++){
+		labels[i].ptr = 0;
+		labels[i].name[0] = '\0';
+	}
+
+	long offset = 0;
+	for(int i = 0; i < codeLines; i++){
+		t_word wordzero = sourceLines[i].words[0];
+		if(wordzero.type == WORD_SPECIAL && wordzero.value == SYMBOL_LABEL){
+			int *s = calcSizes(i);
+			labels[offset].ptr = s[0];
+			strcpy(labels[offset].name, sourceLines[i].words[1].str);
+			offset++;
+			free(s);
 		}
 	}
 }
 
 void resolveVariables(){
 	for(int i = 0; i < codeLines; i++){
+		t_word wordzero = sourceLines[i].words[0];
 		for(int j = 0; j < sourceLines[i].wordCount; j++){
 			t_word w = sourceLines[i].words[j];
 			switch(w.type){
 				default: break;
 				case WORD_POINTER:
 					if(strlen(w.str) > 0){
-						int ptr = getStackPointer(executive_size + 1, w.str);
-						if(ptr < 0){
-							printf("[Scope] ResolveVariables: Variable: %s has not been declared\n", w.str);
-							exit(1);
+						if(w.str[0] == '.'){
+							int ptr = getLabelPointer(w.str + 1);
+							if(ptr < 0){
+								printf("[Scope] ResolveVariables: Label %s has not been declared\n.", w.str);
+								exit(1);
+							} else{
+								sourceLines[i].words[j].str[0] = '\0';
+								sourceLines[i].words[j].value = ptr;
+							}
 						} else{
-							sourceLines[i].words[j].str[0] = '\0';
-							sourceLines[i].words[j].value = ptr;
+							int ptr = getStackPointer(executive_size + 1, w.str);
+							if(ptr < 0){
+								printf("[Scope] ResolveVariables: Variable: %s has not been declared\n", w.str);
+								exit(1);
+							} else{
+								sourceLines[i].words[j].str[0] = '\0';
+								sourceLines[i].words[j].value = ptr;
+							}
 						}
 					}
 					break;
@@ -716,6 +804,9 @@ int main(int argc, char *argv[]){
 
 	createStack();
 	dumpStack();
+
+	createLabels();
+	dumpLabels();
 
 	resolveVariables();
 	dumpCodeStack();

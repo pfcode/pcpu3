@@ -100,6 +100,7 @@ void cleanup(){
 
 void gpu(uint8 cmd, uint16 vptr){
 	static SDL_Surface *screen = NULL;
+//	int maxfbsize = 0;
 	switch(cmd){
 		default: break;
 		case 0x00:
@@ -112,9 +113,12 @@ void gpu(uint8 cmd, uint16 vptr){
 			SDL_Flip(screen);
 			break;
 		case 0x02:
-			for(int i = vptr; i < 8000 && i < RAM_SIZE; i++){
-				for(int j = 0; j < 8; j++){
-					((uint8 *)(screen->pixels))[i*8 + j] = (RAM[i] >> j) ? 0xFF : 0x00;
+			if(screen){
+				for(int i = 0; i < 8000 && i + vptr < RAM_SIZE; i++){
+					for(int j = 0; j < 8; j++){
+						((uint8 *)(screen->pixels))[i*8 + j] = ((uint8)(RAM[i + vptr]) >> j) ? 0xFF : 0x00;
+//						if(i*8 + j < maxfbsize) ((uint8 *)(screen->pixels))[i*8 + j] = 0xFF;
+					}
 				}
 			}
 			SDL_Flip(screen);
